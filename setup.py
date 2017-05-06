@@ -5,7 +5,8 @@ setup(
     version='0.1',
     packages=['neutral_model_estimator'],
     install_requires=[
-        'luigi>=2.5'
+        'luigi>=2.5',
+        'toil>=3.7'
     ],
     license='MIT'
 )
