@@ -1,3 +1,4 @@
+import random
 import os
 from collections import namedtuple
 from subprocess import check_call, check_output
@@ -86,19 +87,32 @@ class ApplySingleCopyFilter(luigi.Task):
     """Restrict the bed file to be only within single-copy regions."""
     genome = luigi.Parameter()
     hal_file = luigi.Parameter()
+    bed_file = luigi.Parameter()
     required_overlap = luigi.FloatParameter(default=0.5)
 
     def requires(self):
-        return (ExtractSingleCopyRegions(hal_file=self.hal_file, genome=self.genome),
-                GenerateAncestralRepeatsBed())
+        return ExtractSingleCopyRegions(hal_file=self.hal_file, genome=self.genome)
 
     def output(self):
-        return luigi.LocalTarget('filtered-%s.bed' % self.genome)
+        return luigi.LocalTarget('%s-filtered.bed' % self.bed_file)
 
     def run(self):
-        single_copy_regions = self.input()[0]
-        bed_file = self.input()[1]
+        single_copy_regions = self.input()
         with self.output().open('w') as f:
-            check_call(["bedtools", "intersect", "-a", bed_file.path,
+            check_call(["bedtools", "intersect", "-a", self.bed_file,
                         "-b", single_copy_regions.path, "-f", str(self.required_overlap)],
                        stdout=f)
+
+class SubsampleBed(luigi.Task):
+    """Randomly sample only a portion of the lines from the input BED."""
+    bed_file = luigi.Parameter()
+    sample_proportion = luigi.FloatParameter()
+
+    def output(self):
+        return luigi.LocalTarget('%s-sampled.bed' % self.bed_file)
+
+    def run(self):
+        with open(self.bed_file) as in_bed, self.output().open('w') as out_bed:
+            for line in in_bed:
+                if random.random() <= self.sample_proportion:
+                    out_bed.write(line)
