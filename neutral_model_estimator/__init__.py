@@ -10,6 +10,7 @@ class GenerateNeutralModel(luigi.Task):
     hal_file = luigi.Parameter()
     sample_proportion = luigi.FloatParameter(default=1.0)
     no_single_copy = luigi.BoolParameter()
+    rm_species = luigi.Parameter()
 
     def requires(self):
         job = self.clone(GenerateAncestralRepeatsBed)

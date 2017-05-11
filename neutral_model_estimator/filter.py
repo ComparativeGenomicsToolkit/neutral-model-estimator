@@ -76,7 +76,7 @@ class ExtractSingleCopyRegions(luigi.Task):
         return luigi.LocalTarget('singleCopyRegions-%s.bed' % self.genome)
 
     def run(self):
-        opts = Job.Runner.getDefaultOptions('./jobStore')
+        opts = Job.Runner.getDefaultOptions('./jobStore-singleCopy-%s' % self.genome)
         with Toil(opts) as toil:
             result = toil.start(Job.wrapJobFn(extract_single_copy_regions_parallel,
                                               os.path.abspath(self.hal_file), self.genome,
