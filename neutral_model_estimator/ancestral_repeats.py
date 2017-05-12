@@ -115,7 +115,7 @@ class GenerateAncestralRepeatsBed(luigi.Task):
     def rm_line_to_bed_line(self, rm_line):
         r"""Translate a RM .out line to a BED line, filtering out certain repeat families.
 
-        >>> garb = GenerateAncestralRepeatsBed('')
+        >>> garb = GenerateAncestralRepeatsBed('', '', '')
         >>> garb.rm_line_to_bed_line('  652   13.0  0.0  2.0  rootrefChr1140   42976  43077  (83898) C SINEC_old  SINE/tRNA           (12)    100      1  61\n')
         ''
         >>> garb.rm_line_to_bed_line('  240   20.0  0.0  0.0  rootrefChr21029  184566 184610  (13049) C L1M5             LINE/L1            (329)   5913   5869 272\n')
