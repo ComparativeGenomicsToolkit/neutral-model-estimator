@@ -12,13 +12,18 @@ from toil.job import Job
 # Toil jobs
 
 def concatenate_job(job, input_ids):
+    """Bring together the various output files from each chunk."""
     output = os.path.join(job.fileStore.getLocalTempDir(), 'rm.out')
     input_paths = map(job.fileStore.readGlobalFile, input_ids)
-    proc = Popen("xargs -0 cat >> {output}".format(output=output), stdin=subprocess.PIPE, shell=True)
-    proc.communicate("\0".join(input_paths))
+    with open(output, 'w') as outfile:
+        for input_path in input_paths:
+            with open(input_path) as infile:
+                for line in infile:
+                    outfile.write(line)
     return job.fileStore.writeGlobalFile(output)
 
 def repeat_masking_job(job, input_fasta, species):
+    """Do the actual RepeatMasking for each chunk."""
     temp_dir = job.fileStore.getLocalTempDir()
     os.chdir(temp_dir)
     local_fasta = os.path.join(temp_dir, 'input.fa')
@@ -30,6 +35,9 @@ def repeat_masking_job(job, input_fasta, species):
     return masked_out
 
 def split_fasta(input_fasta, split_size, work_dir):
+    """Split a fasta file into approximately 'split_size'-sized pieces by sequence.
+
+    Won't play nicely with chromosome-sized sequence."""
     lift_file = os.path.join(work_dir, "lift")
     check_call("faSplit about {input} {split_size} {out_root}".format(
         input=input_fasta,
@@ -38,6 +46,7 @@ def split_fasta(input_fasta, split_size, work_dir):
     return glob(os.path.join(work_dir, "out*"))
 
 def split_fasta_job(job, input_fasta, split_size, species):
+    """Intro job to the repeat-masking toil pipeline."""
     work_dir = job.fileStore.getLocalTempDir()
     local_fasta = os.path.join(work_dir, 'in.fa')
     job.fileStore.readGlobalFile(input_fasta, local_fasta)
