@@ -7,7 +7,7 @@ import luigi
 from toil.common import Toil
 from toil.job import Job
 
-from ancestral_repeats import GenerateAncestralRepeatsBed
+from neutral_model_estimator import NMETask
 
 # Toil jobs for the extract-single-copy-regions phase
 
@@ -64,37 +64,39 @@ def collate_chunks(job, finished_chunk_ids):
 
 # Luigi tasks
 
-class ExtractSingleCopyRegions(luigi.Task):
+class ExtractSingleCopyRegions(NMETask):
     """Get a BED of single-copy regions from a hal file.
 
     Delegates to a toil pipeline to parallelize the process."""
-    hal_file = luigi.Parameter()
-    genome = luigi.Parameter()
-    chunk_size = luigi.IntParameter(default=500000)
+    chunk_size = luigi.IntParameter(default=50000)
 
     def output(self):
-        return luigi.LocalTarget('singleCopyRegions-%s.bed' % self.genome)
+        return self.target_in_work_dir('singleCopyRegions-%s.bed' % self.genome)
 
     def run(self):
-        opts = Job.Runner.getDefaultOptions('./jobStore-singleCopy-%s' % self.genome)
+        jobStorePath = '%s/jobStore-singleCopy-%s' % (self.work_dir, self.genome)
+        opts = Job.Runner.getDefaultOptions(jobStorePath)
+        if os.path.exists(jobStorePath):
+            opts.restart = True
+        opts.disableCaching = True
+        opts.batchSystem = self.batchSystem
+        opts.parasolCommand = self.parasolCommand
         with Toil(opts) as toil:
             result = toil.start(Job.wrapJobFn(extract_single_copy_regions_parallel,
                                               os.path.abspath(self.hal_file), self.genome,
                                               self.chunk_size))
             toil.exportFile(result, 'file://' + os.path.abspath(self.output().path))
 
-class ApplySingleCopyFilter(luigi.Task):
+class ApplySingleCopyFilter(NMETask):
     """Restrict the bed file to be only within single-copy regions."""
-    genome = luigi.Parameter()
-    hal_file = luigi.Parameter()
     prev_task = luigi.TaskParameter()
     required_overlap = luigi.FloatParameter(default=0.5)
 
     def requires(self):
-        return self.prev_task, ExtractSingleCopyRegions(hal_file=self.hal_file, genome=self.genome)
+        return self.prev_task, self.clone(ExtractSingleCopyRegions)
 
     def output(self):
-        return luigi.LocalTarget('%s-filtered.bed' % self.genome)
+        return self.target_in_work_dir('%s-filtered.bed' % self.genome)
 
     def run(self):
         bed_file = self.input()[0].path
@@ -104,16 +106,19 @@ class ApplySingleCopyFilter(luigi.Task):
                         "-b", single_copy_regions, "-f", str(self.required_overlap)],
                        stdout=f)
 
-class SubsampleBed(luigi.Task):
+class SubsampleBed(NMETask):
     """Randomly sample only a portion of the lines from the input BED."""
-    bed_file = luigi.Parameter()
     sample_proportion = luigi.FloatParameter()
+    prev_task = luigi.TaskParameter()
+
+    def requires(self):
+        return self.prev_task
 
     def output(self):
-        return luigi.LocalTarget('%s-sampled.bed' % self.bed_file)
+        return self.target_in_work_dir('%s-sampled.bed' % self.genome)
 
     def run(self):
-        with open(self.bed_file) as in_bed, self.output().open('w') as out_bed:
+        with self.input().open() as in_bed, self.output().open('w') as out_bed:
             for line in in_bed:
                 if random.random() <= self.sample_proportion:
                     out_bed.write(line)

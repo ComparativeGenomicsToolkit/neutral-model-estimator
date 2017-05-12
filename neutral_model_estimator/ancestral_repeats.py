@@ -9,6 +9,8 @@ import luigi
 from toil.common import Toil
 from toil.job import Job
 
+from neutral_model_estimator import NMETask
+
 # Toil jobs
 
 def concatenate_job(job, input_ids):
@@ -57,49 +59,48 @@ def split_fasta_job(job, input_fasta, split_size, species):
 
 # Luigi tasks
 
-class GetAncestralRepeats(luigi.Task):
+class GetAncestralRepeats(NMETask):
     """Get a RepeatMasker .out file. Delegates to a toil pipeline to parallelize."""
-    genome = luigi.Parameter()
-    hal_file = luigi.Parameter()
-    split_size = luigi.IntParameter(default=100000)
+    split_size = luigi.IntParameter(default=50000)
     rm_species = luigi.Parameter()
 
     def requires(self):
         return self.clone(ExtractGenomeFasta)
 
     def output(self):
-        return luigi.LocalTarget('%s.out' % self.genome)
+        return self.target_in_work_dir('%s.out' % self.genome)
 
     def run(self):
-        opts = Job.Runner.getDefaultOptions('./jobStore-repeats-%s' % self.genome)
-        opts.cleanWorkDir = 'onSuccess'
+        jobStorePath = '%s/jobStore-repeats-%s' % (self.work_dir, self.genome)
+        opts = Job.Runner.getDefaultOptions(jobStorePath)
+        if os.path.exists(jobStorePath):
+            opts.restart = True
+        opts.disableCaching = True
+        opts.batchSystem = self.batchSystem
+        opts.parasolCommand = self.parasolCommand
         with Toil(opts) as toil:
             fasta = toil.importFile('file://' + os.path.abspath(self.input().path))
             result = toil.start(Job.wrapJobFn(split_fasta_job,
                                               fasta, self.split_size, self.rm_species))
             toil.exportFile(result, 'file://' + os.path.abspath(self.output().path))
 
-class ExtractGenomeFasta(luigi.Task):
+class ExtractGenomeFasta(NMETask):
     """Get the fasta for a genome from the HAL file."""
-    genome = luigi.Parameter()
-    hal_file = luigi.Parameter()
-
     def output(self):
-        return luigi.LocalTarget('%s.fa' % self.genome)
+        return self.target_in_work_dir('%s.fa' % self.genome)
 
     def run(self):
         with self.output().open('w') as f:
             check_call(["hal2fasta", self.hal_file, self.genome], stdout=f)
 
-class GenerateAncestralRepeatsBed(luigi.Task):
+class GenerateAncestralRepeatsBed(NMETask):
     """Go from an ancestral RepeatMasker .out file to a .bed.
 
     The repeats are filtered to remove likely-conserved "repeats" such
     as tRNAs, low-complexity regions, etc.
     """
-    genome = luigi.Parameter()
-    hal_file = luigi.Parameter()
     rm_species = luigi.Parameter()
+    
 
     # Matches RM .out headers and blank lines.
     header_re = re.compile(r'^$|^   SW   perc perc perc .*|score   div\. del\. .*'
@@ -112,7 +113,7 @@ class GenerateAncestralRepeatsBed(luigi.Task):
         return self.clone(GetAncestralRepeats)
 
     def output(self):
-        return luigi.LocalTarget('ancestralRepeats.bed')
+        return self.target_in_work_dir('ancestralRepeats.bed')
 
     def run(self):
         with self.input().open() as rmfile, self.output().open('w') as bedfile:
