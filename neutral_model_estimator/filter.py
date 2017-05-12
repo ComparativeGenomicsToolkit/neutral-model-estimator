@@ -87,20 +87,21 @@ class ApplySingleCopyFilter(luigi.Task):
     """Restrict the bed file to be only within single-copy regions."""
     genome = luigi.Parameter()
     hal_file = luigi.Parameter()
-    bed_file = luigi.Parameter()
+    prev_task = luigi.TaskParameter()
     required_overlap = luigi.FloatParameter(default=0.5)
 
     def requires(self):
-        return ExtractSingleCopyRegions(hal_file=self.hal_file, genome=self.genome)
+        return self.prev_task, ExtractSingleCopyRegions(hal_file=self.hal_file, genome=self.genome)
 
     def output(self):
-        return luigi.LocalTarget('%s-filtered.bed' % self.bed_file)
+        return luigi.LocalTarget('%s-filtered.bed' % self.genome)
 
     def run(self):
-        single_copy_regions = self.input()
+        bed_file = self.input()[0].path
+        single_copy_regions = self.input()[1].path
         with self.output().open('w') as f:
-            check_call(["bedtools", "intersect", "-a", self.bed_file,
-                        "-b", single_copy_regions.path, "-f", str(self.required_overlap)],
+            check_call(["bedtools", "intersect", "-a", bed_file,
+                        "-b", single_copy_regions, "-f", str(self.required_overlap)],
                        stdout=f)
 
 class SubsampleBed(luigi.Task):
