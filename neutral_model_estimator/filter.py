@@ -54,8 +54,11 @@ def collate_chunks(job, finished_chunk_ids):
     """Merge all the single-copy BED chunks into one large sorted BED file."""
     finished_chunks = [job.fileStore.readGlobalFile(chunk) for chunk in finished_chunk_ids]
     unsorted_bed = job.fileStore.getLocalTempFile()
-    with open(unsorted_bed, 'w') as f:
-        check_call(["cat"] + finished_chunks, stdout=f)
+    with open(unsorted_bed, 'w') as outf:
+        for chunk in finished_chunks:
+            with open(chunk) as inf:
+                for line in inf:
+                    outf.write(line)
 
     sorted_bed = job.fileStore.getLocalTempFile()
     with open(sorted_bed, 'w') as f:
