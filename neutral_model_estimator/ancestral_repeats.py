@@ -80,8 +80,11 @@ class GetAncestralRepeats(NMETask):
         opts.parasolCommand = self.parasolCommand
         with Toil(opts) as toil:
             fasta = toil.importFile('file://' + os.path.abspath(self.input().path))
-            result = toil.start(Job.wrapJobFn(split_fasta_job,
-                                              fasta, self.split_size, self.rm_species))
+            if opts.restart:
+                result = toil.restart()
+            else:
+                result = toil.start(Job.wrapJobFn(split_fasta_job,
+                                                  fasta, self.split_size, self.rm_species))
             toil.exportFile(result, 'file://' + os.path.abspath(self.output().path))
 
 class ExtractGenomeFasta(NMETask):

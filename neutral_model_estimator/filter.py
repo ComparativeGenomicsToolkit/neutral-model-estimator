@@ -82,9 +82,12 @@ class ExtractSingleCopyRegions(NMETask):
         opts.batchSystem = self.batchSystem
         opts.parasolCommand = self.parasolCommand
         with Toil(opts) as toil:
-            result = toil.start(Job.wrapJobFn(extract_single_copy_regions_parallel,
-                                              os.path.abspath(self.hal_file), self.genome,
-                                              self.chunk_size))
+            if opts.restart:
+                result = toil.restart()
+            else:
+                result = toil.start(Job.wrapJobFn(extract_single_copy_regions_parallel,
+                                                  os.path.abspath(self.hal_file), self.genome,
+                                                  self.chunk_size))
             toil.exportFile(result, 'file://' + os.path.abspath(self.output().path))
 
 class ApplySingleCopyFilter(NMETask):
