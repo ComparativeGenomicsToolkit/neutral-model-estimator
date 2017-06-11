@@ -43,10 +43,9 @@ class HalPhyloPTrain(NMETask):
 
     def output(self):
         hal_name = os.path.basename(self.hal_file)
-        return self.target_in_work_dir('%s-%s.mod' % (hal_name, self.genome)), \
-               self.target_in_work_dir('%s-%s.err' % (hal_name, self.genome))
+        return self.target_in_work_dir('%s-%s.mod' % (hal_name, self.genome))
 
     def run(self):
         bed_file = self.input().path
         check_call(["halPhyloPTrain.py", "--numProc", str(self.num_procs), "--no4d", self.hal_file,
-                    self.genome, bed_file, self.output()[0].path, "--error", self.output()[1].path])
+                    self.genome, bed_file, self.output().path])
