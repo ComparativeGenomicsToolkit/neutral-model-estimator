@@ -84,6 +84,7 @@ class ExtractSingleCopyRegions(NMETask):
         opts.disableCaching = True
         opts.batchSystem = self.batchSystem
         opts.parasolCommand = self.parasolCommand
+        opts.environment = ["LD_LIBRARY_PATH"]
         with Toil(opts) as toil:
             if opts.restart:
                 result = toil.restart()

@@ -78,6 +78,7 @@ class GetAncestralRepeats(NMETask):
         opts.disableCaching = True
         opts.batchSystem = self.batchSystem
         opts.parasolCommand = self.parasolCommand
+        opts.environment = ["LD_LIBRARY_PATH"]
         with Toil(opts) as toil:
             fasta = toil.importFile('file://' + os.path.abspath(self.input().path))
             if opts.restart:
