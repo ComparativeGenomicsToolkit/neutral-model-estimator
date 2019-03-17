@@ -18,14 +18,27 @@ class NMETask(luigi.Task):
 from neutral_model_estimator.filter import SubsampleBed, ApplySingleCopyFilter
 from neutral_model_estimator.ancestral_repeats import GenerateAncestralRepeatsBed
 
+class Extract4dSites(NMETask):
+    cds_bed = luigi.Parameter()
+
+    def output(self):
+        return self.target_in_work_dir('4d.bed')
+
+    def run(self):
+        with self.output().temporary_path() as output_path:
+            check_call(['hal4dExtract', "--conserved", self.hal_file, self.genome, self.cds_bed, output_path])
+
 class GenerateNeutralModel(NMETask):
     """Wrapper task that ties everything together."""
     sample_proportion = luigi.FloatParameter(default=1.0)
     no_single_copy = luigi.BoolParameter()
-    rm_species = luigi.Parameter()
+    neutral_data = luigi.ChoiceParameter(choices=['4d', 'ancestral_repeats'])
 
     def requires(self):
-        job = self.clone(GenerateAncestralRepeatsBed)
+        if self.neutral_data == '4d':
+            job = self.clone(Extract4dSites)
+        else:
+            job = self.clone(GenerateAncestralRepeatsBed)
         yield job
         if not self.no_single_copy:
             job = self.clone(ApplySingleCopyFilter, prev_task=job)
