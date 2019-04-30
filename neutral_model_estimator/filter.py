@@ -122,7 +122,7 @@ class SubsampleBed(NMETask):
         return self.prev_task
 
     def output(self):
-        return self.target_in_work_dir('%s-sampled.bed' % self.genome)
+        return self.target_in_work_dir('%s-sampled-%s.bed' % (self.genome, self.sample_proportion))
 
     def run(self):
         with self.input().open() as in_bed, self.output().open('w') as out_bed:
