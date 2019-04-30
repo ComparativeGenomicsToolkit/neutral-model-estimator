@@ -50,6 +50,7 @@ class HalPhyloPTrain(NMETask):
     prev_task = luigi.TaskParameter()
     num_procs = luigi.IntParameter(default=2)
     sample_proportion = luigi.FloatParameter(default=1.0)
+    model_type = luigi.ChoiceParameter(choices=('SSREV', 'REV'), default='SSREV')
 
     def requires(self):
         return self.clone(SubsampleBed, prev_task=self.prev_task)
@@ -61,4 +62,4 @@ class HalPhyloPTrain(NMETask):
     def run(self):
         bed_file = self.input().path
         check_call(["halPhyloPTrain.py", "--numProc", str(self.num_procs), "--no4d", self.hal_file,
-                    self.genome, bed_file, self.output().path])
+                    self.genome, bed_file, '--substMod', self.model_type, self.output().path])
