@@ -26,11 +26,11 @@ class Extract4dSites(NMETask):
 
     def run(self):
         with self.output().temporary_path() as output_path:
-            check_call(['hal4dExtract', "--conserved", self.hal_file, self.genome, self.cds_bed, output_path])
+            check_call("hal4dExtract --conserved %s %s %s %s" % (self.hal_file, self.genome, self.cds_bed, output_path), shell=True)
 
 class GenerateNeutralModel(NMETask):
     """Wrapper task that ties everything together."""
-    sample_proportion = luigi.FloatParameter(default=1.0)
+    num_bases = luigi.IntParameter(default=1000000000)
     no_single_copy = luigi.BoolParameter()
     neutral_data = luigi.ChoiceParameter(choices=['4d', 'ancestral_repeats'])
 
@@ -43,13 +43,13 @@ class GenerateNeutralModel(NMETask):
         if not self.no_single_copy:
             job = self.clone(ApplySingleCopyFilter, prev_task=job)
             yield job
-        yield self.clone(HalPhyloPTrain, prev_task=job, sample_proportion=self.sample_proportion)
+        yield self.clone(HalPhyloPTrain, prev_task=job, num_bases=self.num_bases)
 
 class HalPhyloPTrain(NMETask):
     """Runs halPhyloPTrain.py to do the actual training."""
     prev_task = luigi.TaskParameter()
     num_procs = luigi.IntParameter(default=2)
-    sample_proportion = luigi.FloatParameter(default=1.0)
+    num_bases = luigi.IntParameter(default=1000000000)
     model_type = luigi.ChoiceParameter(choices=('SSREV', 'REV'), default='SSREV')
 
     def requires(self):

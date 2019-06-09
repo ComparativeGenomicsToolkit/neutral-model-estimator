@@ -115,17 +115,27 @@ class ApplySingleCopyFilter(NMETask):
 
 class SubsampleBed(NMETask):
     """Randomly sample only a portion of the lines from the input BED."""
-    sample_proportion = luigi.FloatParameter()
+    num_bases = luigi.FloatParameter()
     prev_task = luigi.TaskParameter()
 
     def requires(self):
         return self.prev_task
 
     def output(self):
-        return self.target_in_work_dir('%s-sampled-%s.bed' % (self.genome, self.sample_proportion))
+        return self.target_in_work_dir('%s-sampled-%s.bed' % (self.genome, self.num_bases))
 
     def run(self):
-        with self.input().open() as in_bed, self.output().open('w') as out_bed:
+        with self.input().open() as in_bed:
+            bases = []
             for line in in_bed:
-                if random.random() <= self.sample_proportion:
-                    out_bed.write(line)
+                fields = line.split()
+                chr = fields[0]
+                start = int(fields[1])
+                stop = int(fields[2])
+                for i in xrange(start, stop):
+                    bases.append((chr, i))
+            sample_size = min(self.num_bases, len(bases))
+            sample = random.sample(bases, sample_size)
+        with self.output().open('w') as out_bed:
+            for base in sample:
+                out_bed.write("\t".join([base[0], str(base[1]), str(base[1] + 1)]) + "\n")
