@@ -1,7 +1,6 @@
 import random
 import os
-from collections import namedtuple
-from subprocess import check_call, check_output
+from subprocess import check_call
 
 import luigi
 from toil.common import Toil

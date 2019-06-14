@@ -17,6 +17,7 @@ class NMETask(luigi.Task):
 
 from neutral_model_estimator.filter import SubsampleBed, ExtractSingleCopyRegions
 from neutral_model_estimator.ancestral_repeats import GenerateAncestralRepeatsBed
+from neutral_model_estimator.rescale import RescaleNeutralModel
 
 class Extract4dSites(NMETask):
     cds_bed = luigi.Parameter()
@@ -33,6 +34,7 @@ class GenerateNeutralModel(NMETask):
     num_bases = luigi.IntParameter(default=1000000000)
     no_single_copy = luigi.BoolParameter()
     neutral_data = luigi.ChoiceParameter(choices=['4d', 'ancestral_repeats'])
+    rescale_chroms = luigi.DictParameter()
 
     def requires(self):
         if self.neutral_data == '4d':
@@ -45,7 +47,10 @@ class GenerateNeutralModel(NMETask):
         if not self.no_single_copy:
             job = self.clone(ExtractSingleCopyRegions, prev_task=job)
             yield job
-        yield self.clone(HalPhyloPTrain, prev_task=job, num_bases=self.num_bases)
+        job = self.clone(HalPhyloPTrain, prev_task=job, num_bases=self.num_bases)
+        yield job
+        for set_name, chrom_set in self.rescale_chroms.items():
+            yield self.clone(RescaleNeutralModel, prev_task=job, chroms=chrom_set, set_name=set_name)
 
 class HalPhyloPTrain(NMETask):
     """Runs halPhyloPTrain.py to do the actual training."""
