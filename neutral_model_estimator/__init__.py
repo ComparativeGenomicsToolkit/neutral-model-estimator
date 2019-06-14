@@ -15,7 +15,7 @@ class NMETask(luigi.Task):
     def target_in_work_dir(self, filename):
         return luigi.LocalTarget(os.path.join(self.work_dir, filename))
 
-from neutral_model_estimator.filter import SubsampleBed, ApplySingleCopyFilter
+from neutral_model_estimator.filter import SubsampleBed, ExtractSingleCopyRegions
 from neutral_model_estimator.ancestral_repeats import GenerateAncestralRepeatsBed
 
 class Extract4dSites(NMETask):
@@ -40,8 +40,10 @@ class GenerateNeutralModel(NMETask):
         else:
             job = self.clone(GenerateAncestralRepeatsBed)
         yield job
+        job = self.clone(SubsampleBed, prev_task=job)
+        yield job
         if not self.no_single_copy:
-            job = self.clone(ApplySingleCopyFilter, prev_task=job)
+            job = self.clone(ExtractSingleCopyRegions, prev_task=job)
             yield job
         yield self.clone(HalPhyloPTrain, prev_task=job, num_bases=self.num_bases)
 
@@ -53,7 +55,7 @@ class HalPhyloPTrain(NMETask):
     model_type = luigi.ChoiceParameter(choices=('SSREV', 'REV'), default='SSREV')
 
     def requires(self):
-        return self.clone(SubsampleBed, prev_task=self.prev_task)
+        return self.prev_task
 
     def output(self):
         hal_name = os.path.basename(self.hal_file)

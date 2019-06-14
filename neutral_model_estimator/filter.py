@@ -11,43 +11,31 @@ from neutral_model_estimator import NMETask
 
 # Toil jobs for the extract-single-copy-regions phase
 
-Chunk = namedtuple('Chunk', 'start length')
-
-def extract_single_copy_regions_parallel(job, hal_file, genome, chunk_size):
+def extract_single_copy_regions_parallel(job, hal_file, bed_file_id, genome, chunk_size):
     """Get a BED of single-copy regions from a hal file in parallel.
 
     Child jobs: extract_single_copy_regions_from_chunk
     Follow-on jobs: collate_chunks"""
-    # Get the total length of the genome: this is necessary for
-    # chunking the genome
-    stats_lines = [line.split(",") for line in check_output(["halStats", hal_file]).split("\n")]
-    relevant_line = next((fields for fields in stats_lines if fields[0] == genome), None)
-    assert relevant_line is not None, "No line for genome %s found in halStats output" % genome
-    genome_length = int(relevant_line[2])
-    # Chunk it up and send the chunked regions to our children
-    chunks = chunk_genome(genome_length, chunk_size)
+    bed_path = job.fileStore.readGlobalFile(bed_file_id)
+    lines = []
+    with open(bed_path) as bed:
+        for line in bed:
+            fields = line.split()
+            lines.append((fields[0], fields[1], int(fields[2]) - int(fields[1])))
+    chunks = []
+    for i in xrange(0, len(lines), chunk_size):
+        chunks.append(lines[i:i + chunk_size])
     finished_chunks = [job.addChildJobFn(extract_single_copy_regions_from_chunk, hal_file, genome, chunk).rv() for chunk in chunks]
     # Return a sorted file collating the children's output
     return job.addFollowOnJobFn(collate_chunks, finished_chunks).rv()
-
-def chunk_genome(genome_length, chunk_size):
-    """Chunks a genome of length genome_length into Chunks of at most chunk_size length.
-
-    Helper function for extract_single_copy_regions_parallel.
-
-    >>> chunk_genome(10, 3)
-    [Chunk(start=0, length=3), Chunk(start=3, length=3), Chunk(start=6, length=3), Chunk(start=9, length=1)]"""
-    chunks = []
-    for i in range(0, genome_length, chunk_size):
-        chunks.append(Chunk(start=i, length=min(chunk_size, genome_length - i)))
-    return chunks
 
 def extract_single_copy_regions_from_chunk(job, hal_file, genome, chunk):
     """Return a BED containing the single-copy regions from a single chunk."""
     bed = job.fileStore.getLocalTempFile()
     with open(bed, 'w') as f:
-        check_call(["halSingleCopyRegionsExtract", hal_file, genome, "--start", str(chunk.start),
-                    "--length", str(chunk.length)], stdout=f)
+        for chr, start, length in chunk:
+            check_call(["halSingleCopyRegionsExtract", hal_file, genome, "--refSequence", chr, "--start", str(start),
+                        "--length", str(length)], stdout=f)
     return job.fileStore.writeGlobalFile(bed)
 
 def collate_chunks(job, finished_chunk_ids):
@@ -71,7 +59,11 @@ class ExtractSingleCopyRegions(NMETask):
     """Get a BED of single-copy regions from a hal file.
 
     Delegates to a toil pipeline to parallelize the process."""
-    chunk_size = luigi.IntParameter(default=50000)
+    chunk_size = luigi.IntParameter(default=500)
+    prev_task = luigi.TaskParameter()
+
+    def requires(self):
+        return self.prev_task
 
     def output(self):
         return self.target_in_work_dir('singleCopyRegions-%s.bed' % self.genome)
@@ -89,29 +81,11 @@ class ExtractSingleCopyRegions(NMETask):
             if opts.restart:
                 result = toil.restart()
             else:
+                bed_file = toil.importFile('file://' + self.input().path)
                 result = toil.start(Job.wrapJobFn(extract_single_copy_regions_parallel,
-                                                  os.path.abspath(self.hal_file), self.genome,
-                                                  self.chunk_size))
+                                                  os.path.abspath(self.hal_file), bed_file,
+                                                  self.genome, self.chunk_size))
             toil.exportFile(result, 'file://' + os.path.abspath(self.output().path))
-
-class ApplySingleCopyFilter(NMETask):
-    """Restrict the bed file to be only within single-copy regions."""
-    prev_task = luigi.TaskParameter()
-    required_overlap = luigi.FloatParameter(default=0.5)
-
-    def requires(self):
-        return self.prev_task, self.clone(ExtractSingleCopyRegions)
-
-    def output(self):
-        return self.target_in_work_dir('%s-filtered.bed' % self.genome)
-
-    def run(self):
-        bed_file = self.input()[0].path
-        single_copy_regions = self.input()[1].path
-        with self.output().open('w') as f:
-            check_call(["bedtools", "intersect", "-a", bed_file,
-                        "-b", single_copy_regions, "-f", str(self.required_overlap)],
-                       stdout=f)
 
 class SubsampleBed(NMETask):
     """Randomly sample only a portion of the lines from the input BED."""
