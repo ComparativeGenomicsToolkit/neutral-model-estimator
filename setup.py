@@ -6,7 +6,7 @@ setup(
     packages=['neutral_model_estimator'],
     install_requires=[
         'luigi>=2.5',
-        'toil>=3.7',
+        'toil==3.7',
         'python-dateutil==2.7.5',
         'more-itertools<6',
     ],
