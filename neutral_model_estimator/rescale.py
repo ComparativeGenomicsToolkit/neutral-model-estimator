@@ -9,6 +9,7 @@ from neutral_model_estimator import NMETask
 
 class RescaleNeutralModel(NMETask):
     num_sampled_bases = luigi.IntParameter(default=3000)
+    rescale_genome = luigi.Parameter()
     chroms = luigi.ListParameter()
     prev_task = luigi.TaskParameter()
     set_name = luigi.Parameter()
@@ -17,13 +18,13 @@ class RescaleNeutralModel(NMETask):
         return self.prev_task
 
     def output(self):
-        return self.target_in_work_dir('%s-%s-%s.mod' % (os.path.basename(self.hal_file), self.genome, self.set_name))
+        return self.target_in_work_dir('%s-%s-%s.mod' % (os.path.basename(self.hal_file), self.rescale_genome, self.set_name))
 
     def run(self):
         # Sample bases
         sampled_bases = NamedTemporaryFile()
         with NamedTemporaryFile() as f:
-            bed_lines = check_output(['halStats', '--bedSequences', self.genome, self.hal_file]).split('\n')
+            bed_lines = check_output(['halStats', '--bedSequences', self.rescale_genome, self.hal_file]).split('\n')
             for line in bed_lines:
                 if len(line.strip()) == 0:
                     continue
@@ -35,7 +36,7 @@ class RescaleNeutralModel(NMETask):
 
         # Extract a MAF from the sampled bases
         maf_file = NamedTemporaryFile()
-        check_call(['hal2maf', '--onlyOrthologs', '--noAncestors', '--refGenome', self.genome, '--refTargets', sampled_bases.name, self.hal_file, maf_file.name])
+        check_call(['hal2maf', '--onlyOrthologs', '--noAncestors', '--refGenome', self.rescale_genome, '--refTargets', sampled_bases.name, self.hal_file, maf_file.name])
         sampled_bases.close()
 
         # Convert to SS
